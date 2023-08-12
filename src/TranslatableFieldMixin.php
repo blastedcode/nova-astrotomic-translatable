@@ -25,11 +25,15 @@ class TranslatableFieldMixin
                 $attribute = FieldServiceProvider::normalizeAttribute($attribute);
 
                 // Load value from either the model or from the given $value
-                if (isset($resource) && (is_object($resource) || is_string($resource)) && method_exists($resource, 'getTranslations')) {
+                if (isset($resource) && (is_object($resource) || is_string($resource)) && method_exists($resource, 'getTranslationsArray')) {
                     // In case a model has the HasTranslations trait, but some fields are wrapped
                     // we must be prepared to get an Exception here
                     try {
-                        $value = $resource->getTranslations($attribute);
+                        $allTranslations = $resource->getTranslationsArray($attribute);
+                        $value = [];
+                        foreach ($locales as $localeKey => $localeName) {
+                            $value[$localeKey] = $allTranslations[$localeKey][$attribute] ?? null;
+                        }
                     } catch (Exception $e) {
                         $value = [];
                     }
@@ -130,15 +134,22 @@ class TranslatableFieldMixin
 
             $this->fillUsing(function ($request, $model, $attribute, $requestAttribute) use ($locales) {
                 $realAttribute = FieldServiceProvider::normalizeAttribute($this->meta['translatable']['original_attribute'] ?? $attribute);
-                $value = $request->{$realAttribute};
-                $translations = is_string($value) ? json_decode($value, true) : $value;
+                $translations = $request->{$realAttribute};
+                foreach ($locales as $localeKey => $localeName) {
+                    $translationEntry = $model->translateOrNew($localeKey);
 
-                $isTranslatableAttribute = method_exists($model, 'isTranslatableAttribute') && $model->isTranslatableAttribute($realAttribute);
-                if ($isTranslatableAttribute && is_array($translations)) {
-                    $model->setTranslations($realAttribute, $translations);
-                } else {
-                    $model->{$realAttribute} = $translations;
+                    $translationEntry->{$realAttribute} = $translations[$localeKey] ?? '';
                 }
+
+//                $value = $request->{$realAttribute};
+//                $translations = is_string($value) ? json_decode($value, true) : $value;
+
+//                $isTranslatableAttribute = method_exists($model, 'isTranslatableAttribute') && $model->isTranslatableAttribute($realAttribute);
+//                if ($isTranslatableAttribute && is_array($translations)) {
+//                    $model->setTranslations($realAttribute, $translations);
+//                } else {
+//                    $model->{$realAttribute} = $translations;
+//                }
             });
 
             return $this;
